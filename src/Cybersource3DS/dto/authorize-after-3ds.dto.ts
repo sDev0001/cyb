@@ -18,6 +18,9 @@ class ProcessingInformationDto {
 }
 
 class CardDto {
+  @ApiProperty({ example: '001', description: '001=Visa, 002=Mastercard, 003=Amex' })
+  type?: string;
+
   @ApiProperty({ example: '4111111111111111' })
   number: string;
 

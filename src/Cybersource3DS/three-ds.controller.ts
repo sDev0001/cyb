@@ -160,6 +160,7 @@ export class ThreeDsController {
           },
           paymentInformation: {
             card: {
+              type: '001',
               number: '4000000000002503',
               expirationMonth: '12',
               expirationYear: '2026',
@@ -572,18 +573,40 @@ export class ThreeDsController {
   }
 
   async function completePayment() {
-    setStatus('<span class="spinner spinner-dark"></span> Se finalizeaza plata...', 'info');
+    setStatus('<span class="spinner spinner-dark"></span> Se valideaza autentificarea...', 'info');
 
     try {
       const s = checkoutState;
+      const validateCardType = cardTypeMap[s.cardData.type] || s.cardData.type;
+
+      // Step 1: Validate authentication
+      const valResp = await fetch('/3ds/validate-authentication-results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentInformation: { card: { type: validateCardType } },
+          consumerAuthenticationInformation: {
+            authenticationTransactionId: s.authenticationTransactionId,
+          },
+          clientReferenceInformation: { code: s.clientReferenceCode },
+        }),
+      });
+
+      const valResult = await valResp.json();
+      const authInfo = valResult.data?.consumerAuthenticationInformation || {};
+
+      setStatus('<span class="spinner spinner-dark"></span> Se proceseaza plata...', 'info');
+
+      // Step 2: Authorize + Capture
       const resp = await fetch('/3ds/authorize-after-3ds', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           clientReferenceInformation: { code: s.clientReferenceCode },
-          processingInformation: { commerceIndicator: 'vbv' },
+          processingInformation: { commerceIndicator: authInfo.indicator || 'vbv' },
           paymentInformation: {
             card: {
+              type: s.cardData.type,
               number: s.cardData.number,
               expirationMonth: s.cardData.expirationMonth,
               expirationYear: s.cardData.expirationYear,
@@ -607,7 +630,13 @@ export class ThreeDsController {
             },
           },
           consumerAuthenticationInformation: {
+            cavv: authInfo.cavv,
+            xid: authInfo.xid,
+            eci: authInfo.eci || authInfo.eciRaw,
             authenticationTransactionId: s.authenticationTransactionId,
+            paresStatus: authInfo.paresStatus,
+            specificationVersion: authInfo.specificationVersion,
+            directoryServerTransactionId: authInfo.directoryServerTransactionId,
           },
         }),
       });
