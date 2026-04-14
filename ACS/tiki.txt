@@ -1,0 +1,376 @@
+------------------- 1 STEP -------------------------
+
+req: /setup-payer-auth
+
+curl -X 'POST' \
+  'http://localhost:3000/3ds/setup-payer-auth' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "paymentInformation": {
+    "card": {
+      "type": "001",
+      "expirationMonth": "12",
+      "expirationYear": "2026",
+      "number": "4000000000002503"
+    }
+  }
+}'
+
+
+
+Response body : /setup-payer-auth
+
+{
+  "success": true,
+  "id": "7758264601036936304807",
+  "status": "COMPLETED",
+  "message": "Cardul este inregistrat pentru 3DS.",
+  "data": {
+    "id": "7758264601036936304807",
+    "submitTimeUtc": "2026-04-10T13:07:40Z",
+    "status": "COMPLETED",
+    "consumerAuthenticationInformation": {
+      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiI3NmUzNzFiZS1lN2U4LTQ5ODctODQwZS0xOTY0MDEzZmI5NWEiLCJpYXQiOjE3NzU4MjY0NjAsImlzcyI6IjVkZDgzYmYwMGU0MjNkMTQ5OGRjYmFjYSIsImV4cCI6MTc3NTgzMDA2MCwiT3JnVW5pdElkIjoiNjk5NThiZWU4YTk1Zjc3ZDk0MTY4ZTkzIiwiUmVmZXJlbmNlSWQiOiJlMjg2YmZmOC1iZGM2LTQyMDktODAxZS03Yjk0NGYwNGJlYjEifQ.eEtJufEn62UD2smSFRE2GWa0AQQXYPlqWYyDubVSJRo",
+      "referenceId": "e286bff8-bdc6-4209-801e-7b944f04beb1",
+      "deviceDataCollectionUrl": "https://centinelapistag.cardinalcommerce.com/V1/Cruise/Collect"
+    },
+    "clientReferenceInformation": {
+      "code": "cybs_test",
+      "partner": {
+        "developerId": "7891234",
+        "solutionId": "89012345"
+      }
+    }
+  }
+}
+
+
+------------------- 2 STEP -------------------------
+Check Payer Auth Enrollment (3DS Challenge) , conform 3ds with token access from link: example : https://acs-sooty.vercel.app
+
+go to https://acs-sooty.vercel.app paste AccessToken from consumerAuthenticationInformation
+
+start 3DS and validate
+
+
+req : /check-payer-auth-enrollment
+
+curl -X 'POST' \
+  'http://localhost:3000/3ds/check-payer-auth-enrollment' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "orderInformation": {
+    "amountDetails": {
+      "currency": "USD",
+      "totalAmount": "10.99"
+    },
+    "billTo": {
+      "address1": "1 Market St",
+      "administrativeArea": "CA",
+      "country": "US",
+      "locality": "san francisco",
+      "firstName": "John",
+      "lastName": "Doe",
+      "email": "test@cybs.com",
+      "postalCode": "94105"
+    }
+  },
+  "paymentInformation": {
+    "card": {
+      "type": "001",
+      "number": "4000000000002503",
+      "expirationMonth": "12",
+      "expirationYear": "2026"
+    }
+  },
+  "buyerInformation": {
+    "mobilePhone": "1245789632"
+  },
+  "deviceInformation": {
+    "ipAddress": "139.130.4.5",
+    "httpAcceptContent": "text/html,application/xhtml+xml",
+    "httpBrowserLanguage": "en-US",
+    "httpBrowserJavaEnabled": "N",
+    "httpBrowserJavaScriptEnabled": "Y",
+    "httpBrowserColorDepth": "24",
+    "httpBrowserScreenHeight": "1080",
+    "httpBrowserScreenWidth": "1920",
+    "httpBrowserTimeDifference": "300",
+    "userAgentBrowserValue": "Mozilla/5.0 Chrome/120"
+  },
+  "consumerAuthenticationInformation": {
+    "deviceChannel": "BROWSER",
+    "transactionMode": "eCommerce",
+    "returnUrl": "https://polka.requestcatcher.com"
+  }
+}'
+
+
+Response body : /check-payer-auth-enrollment
+
+
+{
+  "success": true,
+  "status": "PENDING_AUTHENTICATION",
+  "data": {
+    "id": "7758264833796954704807",
+    "submitTimeUtc": "2026-04-10T13:08:03Z",
+    "status": "PENDING_AUTHENTICATION",
+    "clientReferenceInformation": {
+      "code": "cybs_test",
+      "partner": {
+        "developerId": "N2RC3Q4K"
+      }
+    },
+    "consumerAuthenticationInformation": {
+      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJhMzY1ZTcwYy1jZjlkLTRhNjUtYjljOS1hMjVkODJlYzNiYTUiLCJpYXQiOjE3NzU4MjY0ODMsImlzcyI6IjVkZDgzYmYwMGU0MjNkMTQ5OGRjYmFjYSIsImV4cCI6MTc3NTgzMDA4MywiT3JnVW5pdElkIjoiNjk5NThiZWU4YTk1Zjc3ZDk0MTY4ZTkzIiwiUGF5bG9hZCI6eyJBQ1NVcmwiOiJodHRwczovLzBtZXJjaGFudGFjc3N0YWcuY2FyZGluYWxjb21tZXJjZS5jb20vTWVyY2hhbnRBQ1NXZWIvY3JlcS5qc3AiLCJQYXlsb2FkIjoiZXlKdFpYTnpZV2RsVkhsd1pTSTZJa05TWlhFaUxDSnRaWE56WVdkbFZtVnljMmx2YmlJNklqSXVNaTR3SWl3aWRHaHlaV1ZFVTFObGNuWmxjbFJ5WVc1elNVUWlPaUl6T0RZeU9Ua3lNeTFoTVRreExUUmhOakF0T0RBeU5TMWtOVFZsWkRKbVpqbG1ZMllpTENKaFkzTlVjbUZ1YzBsRUlqb2lOV1ZrTXpFNFltWXROakExTXkwME1UZGxMVGsxTURndE9EazRZemhsWldSaU5qVmhJaXdpWTJoaGJHeGxibWRsVjJsdVpHOTNVMmw2WlNJNklqQXlJbjAiLCJUcmFuc2FjdGlvbklkIjoiZk95akFCZ0NMY3hLRWtPN0VsQjAifSwiT2JqZWN0aWZ5UGF5bG9hZCI6dHJ1ZSwiUmV0dXJuVXJsIjoiaHR0cHM6Ly9wb2xrYS5yZXF1ZXN0Y2F0Y2hlci5jb20ifQ.8D5i2Oxzpm4rAG1DdE6s39SKhL5l-ORLwLciNvsGEh0",
+      "acsTransactionId": "5ed318bf-6053-417e-9508-898c8eedb65a",
+      "acsUrl": "https://0merchantacsstag.cardinalcommerce.com/MerchantACSWeb/creq.jsp",
+      "authenticationTransactionId": "fOyjABgCLcxKEkO7ElB0",
+      "challengeRequired": "N",
+      "pareq": "eyJtZXNzYWdlVHlwZSI6IkNSZXEiLCJtZXNzYWdlVmVyc2lvbiI6IjIuMi4wIiwidGhyZWVEU1NlcnZlclRyYW5zSUQiOiIzODYyOTkyMy1hMTkxLTRhNjAtODAyNS1kNTVlZDJmZjlmY2YiLCJhY3NUcmFuc0lEIjoiNWVkMzE4YmYtNjA1My00MTdlLTk1MDgtODk4YzhlZWRiNjVhIiwiY2hhbGxlbmdlV2luZG93U2l6ZSI6IjAyIn0",
+      "paresStatus": "C",
+      "specificationVersion": "2.2.0",
+      "stepUpUrl": "https://centinelapistag.cardinalcommerce.com/V2/Cruise/StepUp",
+      "threeDSServerTransactionId": "38629923-a191-4a60-8025-d55ed2ff9fcf",
+      "veresEnrolled": "Y",
+      "directoryServerTransactionId": "9e8da9ae-bbd5-4312-921a-0432759087a4",
+      "acsOperatorID": "MerchantACS",
+      "acsReferenceNumber": "CardinalACS"
+    },
+    "errorInformation": {
+      "reason": "CONSUMER_AUTHENTICATION_REQUIRED",
+      "message": "The cardholder is enrolled in Payer Authentication. Please authenticate the cardholder before continuing with the transaction."
+    }
+  }
+}
+
+
+
+------------------- 3 STEP -------------------------
+
+req: /validate-authentication-results
+
+
+curl -X 'POST' \
+  'http://localhost:3000/3ds/validate-authentication-results' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "paymentInformation": {
+    "card": {
+      "type": "VISA"
+    }
+  },
+  "consumerAuthenticationInformation": {
+    "authenticationTransactionId": "fOyjABgCLcxKEkO7ElB0"
+  }
+}'
+
+
+
+
+Response body:
+
+{
+  "success": true,
+  "status": 201,
+  "data": {
+    "id": "7758265437866296704806",
+    "submitTimeUtc": "2026-04-10T13:09:03Z",
+    "status": "AUTHENTICATION_SUCCESSFUL",
+    "clientReferenceInformation": {
+      "code": "pavalidatecheck",
+      "partner": {
+        "developerId": "7891234",
+        "solutionId": "89012345"
+      }
+    },
+    "consumerAuthenticationInformation": {
+      "acsTransactionId": "5ed318bf-6053-417e-9508-898c8eedb65a",
+      "authenticationResult": "0",
+      "authenticationStatusMsg": "Success",
+      "cavv": "AAIBBYNoEwAAACcKhAJkdQAAAAA=",
+      "indicator": "vbv",
+      "eci": "05",
+      "eciRaw": "05",
+      "paresStatus": "Y",
+      "specificationVersion": "2.2.0",
+      "threeDSServerTransactionId": "38629923-a191-4a60-8025-d55ed2ff9fcf",
+      "xid": "AAIBBYNoEwAAACcKhAJkdQAAAAA=",
+      "directoryServerTransactionId": "9e8da9ae-bbd5-4312-921a-0432759087a4"
+    }
+  }
+}
+
+
+
+------------------- 4 STEP -------------------------
+ req: /validate-authentication-results
+
+curl -X 'POST' \
+  'http://localhost:3000/3ds/validate-authentication-results' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "paymentInformation": {
+    "card": {
+      "type": "VISA"
+    }
+  },
+  "consumerAuthenticationInformation": {
+    "authenticationTransactionId": "k13m6hgiXkDkYveGr8f0"
+  }
+}'
+
+
+
+Response body:
+
+{
+  "success": true,
+  "status": 201,
+  "data": {
+    "id": "7758263530636189504806",
+    "submitTimeUtc": "2026-04-10T13:05:53Z",
+    "status": "AUTHENTICATION_FAILED",
+    "clientReferenceInformation": {
+      "code": "pavalidatecheck",
+      "partner": {
+        "developerId": "7891234",
+        "solutionId": "89012345"
+      }
+    },
+    "consumerAuthenticationInformation": {
+      "indicator": "internet",
+      "eci": "07"
+    },
+    "errorInformation": {
+      "reason": "CONSUMER_AUTHENTICATION_FAILED",
+      "message": "Encountered a Payer Authentication problem. Payer could not be authenticated."
+    }
+  }
+}
+
+
+
+
+------------------- 5 STEP -------------------------
+
+req: authorize-after-3ds
+
+curl -X 'POST' \
+  'http://localhost:3000/3ds/authorize-after-3ds' \
+  -H 'accept: */*' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "clientReferenceInformation": {
+    "code": "TC50171_123"
+  },
+  "processingInformation": {
+    "commerceIndicator": "vbv"
+  },
+  "paymentInformation": {
+    "card": {
+      "number": "4000000000002503",
+      "expirationMonth": "12",
+      "expirationYear": "2026"
+    }
+  },
+  "orderInformation": {
+    "amountDetails": {
+      "totalAmount": "10.99",
+      "currency": "USD"
+    },
+    "billTo": {
+      "firstName": "John",
+      "lastName": "Doe",
+      "address1": "1 Market St",
+      "locality": "san francisco",
+      "administrativeArea": "CA",
+      "postalCode": "94105",
+      "country": "US",
+      "email": "test@cybs.com",
+      "phoneNumber": "4158880000"
+    }
+  },
+  "consumerAuthenticationInformation": {
+    "cavv": "AAIBBYNoEwAAACcKhAJkdQAAAAA=",
+    "xid": "AAIBBYNoEwAAACcKhAJkdQAAAAA="
+  }
+}'
+
+
+
+Response body
+
+{
+  "success": true,
+  "status": "AUTHORIZED",
+  "id": "7758268099516541104805",
+  "data": {
+    "_links": {
+      "self": {
+        "href": "/pts/v2/payments/7758268099516541104805",
+        "method": "GET"
+      },
+      "capture": {
+        "href": "/pts/v2/payments/7758268099516541104805/captures",
+        "method": "POST"
+      }
+    },
+    "id": "7758268099516541104805",
+    "submitTimeUtc": "2026-04-10T13:13:30Z",
+    "status": "AUTHORIZED",
+    "reconciliationId": "7758268099516541104805",
+    "clientReferenceInformation": {
+      "code": "TC50171_123"
+    },
+    "processorInformation": {
+      "approvalCode": "831000",
+      "transactionId": "016153570198200",
+      "networkTransactionId": "016153570198200",
+      "responseCode": "00",
+      "responseDetails": "ABC",
+      "avs": {
+        "code": "Y",
+        "codeRaw": "Y"
+      },
+      "merchantAdvice": {
+        "code": "01",
+        "codeRaw": "M001"
+      },
+      "consumerAuthenticationResponse": {
+        "code": "2",
+        "codeRaw": "2"
+      },
+      "systemTraceAuditNumber": "904965",
+      "merchantNumber": "498000049807087",
+      "retrievalReferenceNumber": "610013904965"
+    },
+    "paymentAccountInformation": {
+      "card": {
+        "type": "001"
+      }
+    },
+    "paymentInformation": {
+      "card": {
+        "type": "001"
+      },
+      "tokenizedCard": {
+        "type": "001"
+      }
+    },
+    "orderInformation": {
+      "amountDetails": {
+        "authorizedAmount": "10.99",
+        "currency": "USD"
+      }
+    },
+    "consumerAuthenticationInformation": {}
+  }
+}
+
+

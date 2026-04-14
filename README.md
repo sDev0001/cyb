@@ -1,1 +1,1 @@
-# cyb
+# beauty-admins
