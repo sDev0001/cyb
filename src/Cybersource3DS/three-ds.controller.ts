@@ -199,6 +199,111 @@ export class ThreeDsController {
     return this.threeDsService.authorizeAfter3ds(body);
   }
 
+  // ================= TOKEN 3DS: Step 1 - Initiate authentication with token =================
+  @Post('token-checkout')
+  @HttpCode(HttpStatus.OK)
+  @ApiBody({
+    description: 'Initiate 3DS authentication using a saved customer token (repeat transaction)',
+    examples: {
+      default: {
+        summary: 'Token 3DS Enrollment',
+        value: {
+          customerId: 'ABC123DEF456',
+          orderInformation: {
+            amountDetails: {
+              totalAmount: '10.99',
+              currency: 'USD',
+            },
+            billTo: {
+              firstName: 'John',
+              lastName: 'Doe',
+              address1: '1 Market St',
+              locality: 'san francisco',
+              administrativeArea: 'CA',
+              postalCode: '94105',
+              country: 'US',
+              email: 'test@cybs.com',
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Returns accessToken for 3DS StepUp + authenticationTransactionId' })
+  async tokenCheckout(@Body() body: any) {
+    return this.threeDsService.processTokenCheckout(
+      body.customerId,
+      {
+        totalAmount: body.orderInformation.amountDetails.totalAmount,
+        currency: body.orderInformation.amountDetails.currency,
+        firstName: body.orderInformation.billTo.firstName,
+        lastName: body.orderInformation.billTo.lastName,
+        email: body.orderInformation.billTo.email,
+        address1: body.orderInformation.billTo.address1,
+        locality: body.orderInformation.billTo.locality,
+        administrativeArea: body.orderInformation.billTo.administrativeArea,
+        postalCode: body.orderInformation.billTo.postalCode,
+        country: body.orderInformation.billTo.country,
+      },
+      'https://checkout-callback.requestcatcher.com',
+    );
+  }
+
+  // ================= TOKEN 3DS: Step 2 - Validate + Authorize + Capture with token =================
+  @Post('token-authorize')
+  @HttpCode(HttpStatus.OK)
+  @ApiBody({
+    description: 'Validate 3DS + Authorize + Capture using customer token (after OTP completed)',
+    examples: {
+      default: {
+        summary: 'Token Authorize after 3DS',
+        value: {
+          customerId: 'ABC123DEF456',
+          clientReferenceCode: 'tkn_1234567890',
+          authenticationTransactionId: 'fOyjABgCLcxKEkO7ElB0',
+          orderInformation: {
+            amountDetails: {
+              totalAmount: '10.99',
+              currency: 'USD',
+            },
+            billTo: {
+              firstName: 'John',
+              lastName: 'Doe',
+              address1: '1 Market St',
+              locality: 'san francisco',
+              administrativeArea: 'CA',
+              postalCode: '94105',
+              country: 'US',
+              email: 'test@cybs.com',
+              phoneNumber: '4158880000',
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Payment authorized + captured with token and 3DS' })
+  async tokenAuthorize(@Body() body: any) {
+    return this.threeDsService.authorizeTokenAfter3ds(
+      body.customerId,
+      body.clientReferenceCode,
+      body.authenticationTransactionId,
+      {
+        totalAmount: body.orderInformation.amountDetails.totalAmount,
+        currency: body.orderInformation.amountDetails.currency,
+        firstName: body.orderInformation.billTo.firstName,
+        lastName: body.orderInformation.billTo.lastName,
+        email: body.orderInformation.billTo.email,
+        address1: body.orderInformation.billTo.address1,
+        locality: body.orderInformation.billTo.locality,
+        administrativeArea: body.orderInformation.billTo.administrativeArea,
+        postalCode: body.orderInformation.billTo.postalCode,
+        country: body.orderInformation.billTo.country,
+        phoneNumber: body.orderInformation.billTo.phoneNumber,
+      },
+    );
+  }
+
   // ================= CAPTURE (Finalizare tranzactie 3DS) =================
   @Post('capture/:transactionId')
   @HttpCode(HttpStatus.OK)

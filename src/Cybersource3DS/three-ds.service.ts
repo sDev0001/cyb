@@ -336,6 +336,173 @@ export class ThreeDsService {
     };
   }
 
+  // ================= TOKEN-BASED 3DS (repeat transaction with saved token) =================
+  async processTokenCheckout(
+    customerId: string,
+    orderData: { totalAmount: string; currency: string; firstName: string; lastName: string; email: string; address1: string; locality: string; administrativeArea: string; postalCode: string; country: string },
+    returnUrl: string,
+  ): Promise<{ accessToken: string; authenticationTransactionId: string; stepUpUrl: string; clientReferenceCode: string }> {
+    const clientReferenceCode = 'tkn_' + Date.now();
+
+    const requestObj = new cybersourceRestApi.CreatePaymentRequest();
+
+    // Client Reference
+    const clientRef = new cybersourceRestApi.Ptsv2paymentsClientReferenceInformation();
+    clientRef.code = clientReferenceCode;
+    requestObj.clientReferenceInformation = clientRef;
+
+    // Processing Information
+    const processingInfo = new cybersourceRestApi.Ptsv2paymentsProcessingInformation();
+    processingInfo.actionList = ['CONSUMER_AUTHENTICATION'];
+    processingInfo.capture = false;
+    requestObj.processingInformation = processingInfo;
+
+    // Payment Information - use customer token instead of card number
+    requestObj.paymentInformation = {
+      customer: { id: customerId },
+    };
+
+    // Order Information
+    const orderInfo = new cybersourceRestApi.Ptsv2paymentsOrderInformation();
+    const amountDetails = new cybersourceRestApi.Ptsv2paymentsOrderInformationAmountDetails();
+    amountDetails.totalAmount = orderData.totalAmount;
+    amountDetails.currency = orderData.currency;
+    orderInfo.amountDetails = amountDetails;
+
+    const billTo = new cybersourceRestApi.Ptsv2paymentsOrderInformationBillTo();
+    billTo.firstName = orderData.firstName;
+    billTo.lastName = orderData.lastName;
+    billTo.address1 = orderData.address1;
+    billTo.locality = orderData.locality;
+    billTo.administrativeArea = orderData.administrativeArea;
+    billTo.postalCode = orderData.postalCode;
+    billTo.country = orderData.country;
+    billTo.email = orderData.email;
+    orderInfo.billTo = billTo;
+    requestObj.orderInformation = orderInfo;
+
+    // Buyer Information
+    requestObj.buyerInformation = { mobilePhone: '1245789632' };
+
+    // Device Information
+    requestObj.deviceInformation = {
+      ipAddress: '139.130.4.5',
+      httpAcceptContent: 'text/html,application/xhtml+xml',
+      httpBrowserLanguage: 'en-US',
+      httpBrowserJavaEnabled: 'N',
+      httpBrowserJavaScriptEnabled: 'Y',
+      httpBrowserColorDepth: '24',
+      httpBrowserScreenHeight: '1080',
+      httpBrowserScreenWidth: '1920',
+      httpBrowserTimeDifference: '300',
+      userAgentBrowserValue: 'Mozilla/5.0 Chrome/120',
+    };
+
+    // Consumer Authentication Information
+    const consumerAuth = new cybersourceRestApi.Ptsv2paymentsConsumerAuthenticationInformation();
+    consumerAuth.deviceChannel = 'BROWSER';
+    consumerAuth.transactionMode = 'eCommerce';
+    consumerAuth.returnUrl = returnUrl;
+    requestObj.consumerAuthenticationInformation = consumerAuth;
+
+    const paymentsApi = new cybersourceRestApi.PaymentsApi(
+      this.configObject,
+      this.apiClient,
+    );
+
+    const result = await new Promise<any>((resolve, reject) => {
+      paymentsApi.createPayment(requestObj, (error, data, response) => {
+        if (error) return reject(error);
+        resolve({ success: true, status: data.status, id: data.id, data });
+      });
+    });
+
+    const authInfo = result.data?.consumerAuthenticationInformation;
+
+    return {
+      accessToken: authInfo?.accessToken,
+      authenticationTransactionId: authInfo?.authenticationTransactionId,
+      stepUpUrl: authInfo?.stepUpUrl || 'https://centinelapistag.cardinalcommerce.com/V2/Cruise/StepUp',
+      clientReferenceCode,
+    };
+  }
+
+  // ================= AUTHORIZE WITH TOKEN AFTER 3DS =================
+  async authorizeTokenAfter3ds(
+    customerId: string,
+    clientReferenceCode: string,
+    authenticationTransactionId: string,
+    orderData: { totalAmount: string; currency: string; firstName: string; lastName: string; email: string; address1: string; locality: string; administrativeArea: string; postalCode: string; country: string; phoneNumber?: string },
+  ): Promise<any> {
+    try {
+      const requestObj = new cybersourceRestApi.CreatePaymentRequest();
+
+      // Client Reference
+      const clientRef = new cybersourceRestApi.Ptsv2paymentsClientReferenceInformation();
+      clientRef.code = clientReferenceCode;
+      requestObj.clientReferenceInformation = clientRef;
+
+      // Processing Information: VALIDATE + authorize + capture
+      const processingInfo = new cybersourceRestApi.Ptsv2paymentsProcessingInformation();
+      processingInfo.actionList = ['VALIDATE_CONSUMER_AUTHENTICATION'];
+      processingInfo.capture = true;
+      processingInfo.commerceIndicator = 'vbv';
+      requestObj.processingInformation = processingInfo;
+
+      // Payment Information - token
+      requestObj.paymentInformation = {
+        customer: { id: customerId },
+      };
+
+      // Order Information
+      const orderInfo = new cybersourceRestApi.Ptsv2paymentsOrderInformation();
+      const amountDetails = new cybersourceRestApi.Ptsv2paymentsOrderInformationAmountDetails();
+      amountDetails.totalAmount = orderData.totalAmount;
+      amountDetails.currency = orderData.currency;
+      orderInfo.amountDetails = amountDetails;
+
+      const billTo = new cybersourceRestApi.Ptsv2paymentsOrderInformationBillTo();
+      billTo.firstName = orderData.firstName;
+      billTo.lastName = orderData.lastName;
+      billTo.address1 = orderData.address1;
+      billTo.locality = orderData.locality;
+      billTo.administrativeArea = orderData.administrativeArea;
+      billTo.postalCode = orderData.postalCode;
+      billTo.country = orderData.country;
+      billTo.email = orderData.email;
+      billTo.phoneNumber = orderData.phoneNumber || '4158880000';
+      orderInfo.billTo = billTo;
+      requestObj.orderInformation = orderInfo;
+
+      // Consumer Authentication Information
+      const consumerAuth = new cybersourceRestApi.Ptsv2paymentsConsumerAuthenticationInformation();
+      consumerAuth.authenticationTransactionId = authenticationTransactionId;
+      requestObj.consumerAuthenticationInformation = consumerAuth;
+
+      const paymentsApi = new cybersourceRestApi.PaymentsApi(
+        this.configObject,
+        this.apiClient,
+      );
+
+      return new Promise((resolve, reject) => {
+        paymentsApi.createPayment(requestObj, (error, data, response) => {
+          if (error) return reject(error);
+          resolve({
+            success: true,
+            status: data.status,
+            id: data.id,
+            data,
+          });
+        });
+      });
+    } catch (error: any) {
+      console.error('Authorize Token After 3DS Error:', error);
+      throw new InternalServerErrorException(
+        error.message || JSON.stringify(error),
+      );
+    }
+  }
+
   async authorizeAfter3ds(dto: AuthorizeAfter3dsDto): Promise<any> {
     try {
       const requestObj = new cybersourceRestApi.CreatePaymentRequest();
