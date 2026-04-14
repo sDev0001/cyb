@@ -473,9 +473,6 @@ export class ThreeDsController {
 
   <div class="iframe-container" id="iframeContainer">
     <iframe name="stepup_iframe" id="stepupIframe"></iframe>
-    <button id="confirmBtn" onclick="confirmPayment()" style="display:none; width:100%; padding:14px; background:#28a745; color:#fff; border:none; border-radius:6px; font-size:16px; cursor:pointer; font-weight:600; margin-top:10px;">
-      Finalizeaza plata
-    </button>
   </div>
 
   <form id="stepupForm" method="POST" target="stepup_iframe">
@@ -545,18 +542,28 @@ export class ThreeDsController {
 
       checkoutState = { cardData, orderData, ...result };
 
-      setStatus('Pas 2/2: Confirma autentificarea si asteapta finalizarea...', 'info');
+      setStatus('Pas 2/2: Confirma autentificarea in fereastra de mai jos...', 'info');
 
       // Show iframe and submit StepUp form to Cardinal
       document.getElementById('iframeContainer').style.display = 'block';
       document.getElementById('jwtInput').value = result.accessToken;
 
+      // Listen for iframe loads: 1st = Cardinal page, 2nd = redirect after OTP = done
+      let iframeLoadCount = 0;
+      const iframe = document.getElementById('stepupIframe');
+      iframe.onload = function() {
+        iframeLoadCount++;
+        // 1st load = Cardinal StepUp page loaded
+        // 2nd load = Cardinal redirected to returnUrl after OTP submitted
+        if (iframeLoadCount >= 2) {
+          iframe.onload = null;
+          completePayment();
+        }
+      };
+
       const form = document.getElementById('stepupForm');
       form.action = result.stepUpUrl;
       form.submit();
-
-      // Start polling for authentication completion
-      startPolling();
 
     } catch (err) {
       setStatus('Eroare: ' + err.message, 'error');
@@ -564,77 +571,63 @@ export class ThreeDsController {
     }
   }
 
-  function startPolling() {
-    let attempts = 0;
-    const maxAttempts = 60; // 3 min max (60 x 3s)
+  async function completePayment() {
+    setStatus('<span class="spinner spinner-dark"></span> Se finalizeaza plata...', 'info');
 
-    pollTimer = setInterval(async () => {
-      attempts++;
-      if (attempts > maxAttempts) {
-        clearInterval(pollTimer);
-        setStatus('Timeout - autentificarea nu a fost completata in timp util.', 'error');
-        resetBtn();
-        return;
+    try {
+      const s = checkoutState;
+      const resp = await fetch('/3ds/authorize-after-3ds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientReferenceInformation: { code: s.clientReferenceCode },
+          processingInformation: { commerceIndicator: 'vbv' },
+          paymentInformation: {
+            card: {
+              number: s.cardData.number,
+              expirationMonth: s.cardData.expirationMonth,
+              expirationYear: s.cardData.expirationYear,
+            },
+          },
+          orderInformation: {
+            amountDetails: {
+              totalAmount: s.orderData.totalAmount,
+              currency: s.orderData.currency,
+            },
+            billTo: {
+              firstName: s.orderData.firstName,
+              lastName: s.orderData.lastName,
+              address1: s.orderData.address1,
+              locality: s.orderData.locality,
+              administrativeArea: s.orderData.administrativeArea,
+              postalCode: s.orderData.postalCode,
+              country: s.orderData.country,
+              email: s.orderData.email,
+              phoneNumber: '4158880000',
+            },
+          },
+          consumerAuthenticationInformation: {
+            authenticationTransactionId: s.authenticationTransactionId,
+          },
+        }),
+      });
+
+      const result = await resp.json();
+
+      if (result.success) {
+        setStatus(
+          'Tranzactie completa! Transaction ID: ' + result.id +
+          ' | Status: ' + result.status,
+          'success'
+        );
+        document.getElementById('iframeContainer').style.display = 'none';
+      } else {
+        setStatus('Plata esuata: ' + (result.status || 'Unknown'), 'error');
       }
-
-      try {
-        // Call authorize-after-3ds which now includes VALIDATE_CONSUMER_AUTHENTICATION
-        // It will validate + authorize + capture in ONE call
-        // If user hasn't completed OTP yet, this will fail and we retry
-        const s = checkoutState;
-        const resp = await fetch('/3ds/authorize-after-3ds', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            clientReferenceInformation: { code: s.clientReferenceCode },
-            processingInformation: { commerceIndicator: 'vbv' },
-            paymentInformation: {
-              card: {
-                number: s.cardData.number,
-                expirationMonth: s.cardData.expirationMonth,
-                expirationYear: s.cardData.expirationYear,
-              },
-            },
-            orderInformation: {
-              amountDetails: {
-                totalAmount: s.orderData.totalAmount,
-                currency: s.orderData.currency,
-              },
-              billTo: {
-                firstName: s.orderData.firstName,
-                lastName: s.orderData.lastName,
-                address1: s.orderData.address1,
-                locality: s.orderData.locality,
-                administrativeArea: s.orderData.administrativeArea,
-                postalCode: s.orderData.postalCode,
-                country: s.orderData.country,
-                email: s.orderData.email,
-                phoneNumber: '4158880000',
-              },
-            },
-            consumerAuthenticationInformation: {
-              authenticationTransactionId: s.authenticationTransactionId,
-            },
-          }),
-        });
-
-        const result = await resp.json();
-
-        if (result.success && (result.status === 'AUTHORIZED' || result.status === 'PENDING')) {
-          clearInterval(pollTimer);
-          setStatus(
-            'Tranzactie completa! Transaction ID: ' + result.id +
-            ' | Status: ' + result.status,
-            'success'
-          );
-          document.getElementById('iframeContainer').style.display = 'none';
-          resetBtn();
-        }
-        // If not successful, keep polling (user may not have completed OTP yet)
-      } catch (e) {
-        // Not ready yet, keep polling
-      }
-    }, 3000);
+    } catch (err) {
+      setStatus('Eroare: ' + err.message, 'error');
+    }
+    resetBtn();
   }
 </script>
 
