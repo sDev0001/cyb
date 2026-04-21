@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, ValidateNested } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class ClientReferenceDto {
@@ -11,14 +11,19 @@ class ClientReferenceDto {
 class ProcessingInformationDto {
   @ApiProperty({
     example: 'internet',
-    description: 'Commerce Indicator (internet / eci / moto)',
+    description: 'Commerce Indicator (vbv pentru VISA / spa pentru MASTERCARD)',
   })
   @IsString()
   commerceIndicator: string;
 }
 
 class CardDto {
-  @ApiProperty({ example: '001', description: '001=Visa, 002=Mastercard, 003=Amex' })
+  @ApiProperty({
+    example: '001',
+    description: 'Tip card: 001 = VISA, 002 = MASTERCARD',
+  })
+  @IsOptional()
+  @IsString()
   type?: string;
 
   @ApiProperty({ example: '4111111111111111' })
@@ -68,25 +73,46 @@ class OrderInformationDto {
 }
 
 class ConsumerAuthenticationInformationDto {
-  @ApiProperty({ example: 'AAABBBCCC...' })
-  cavv: string;
+  @ApiProperty({ example: 'AAABBBCCC...', description: 'Doar pentru VISA' })
+  @IsOptional()
+  cavv?: string;
 
-  @ApiProperty({ example: 'XID123456' })
-  xid: string;
+  @ApiProperty({ example: 'XID123456', description: 'Doar pentru VISA' })
+  @IsOptional()
+  xid?: string;
+
+  @ApiProperty({
+    example: 'AAIBBYNoEwAAACcKhAJkdQAAAAA=',
+    description: 'Doar pentru MASTERCARD (inlocuieste cavv)',
+  })
+  @IsOptional()
+  ucafAuthenticationData?: string;
+
+  @ApiProperty({
+    example: '2',
+    description: 'Doar pentru MASTERCARD (inlocuieste xid)',
+  })
+  @IsOptional()
+  ucafCollectionIndicator?: string;
 
   @ApiProperty({ example: '05', description: 'ECI from validate-authentication-results' })
+  @IsOptional()
   eci?: string;
 
   @ApiProperty({ example: '2.2.0', description: 'Specification version from validate' })
+  @IsOptional()
   specificationVersion?: string;
 
   @ApiProperty({ example: '01', description: 'Directory server transaction ID' })
+  @IsOptional()
   directoryServerTransactionId?: string;
 
   @ApiProperty({ example: 'fOyjABgCLcxKEkO7ElB0', description: 'Authentication transaction ID from check-payer-auth-enrollment' })
+  @IsOptional()
   authenticationTransactionId?: string;
 
   @ApiProperty({ example: 'Y', description: 'paresStatus from validate' })
+  @IsOptional()
   paresStatus?: string;
 }
 

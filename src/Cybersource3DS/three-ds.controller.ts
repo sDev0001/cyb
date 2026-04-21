@@ -15,10 +15,11 @@ export class ThreeDsController {
   @Post('setup-payer-auth')
   @HttpCode(HttpStatus.OK)
   @ApiBody({
-    description: '3DS Check Enrollment',
+    description:
+      '3DS Check Enrollment. IMPORTANT: type = "001" pentru VISA, type = "002" pentru MASTERCARD.',
     examples: {
-      default: {
-        summary: 'Card 3DS Enrollment',
+      visa: {
+        summary: 'VISA (type = 001)',
         value: {
           paymentInformation: {
             card: {
@@ -26,6 +27,19 @@ export class ThreeDsController {
               expirationMonth: '12',
               expirationYear: '2026',
               number: '4000000000002503',
+            },
+          },
+        },
+      },
+      mastercard: {
+        summary: 'MASTERCARD (type = 002)',
+        value: {
+          paymentInformation: {
+            card: {
+              type: '002',
+              expirationMonth: '12',
+              expirationYear: '2030',
+              number: '5120342233150747',
             },
           },
         },
@@ -53,10 +67,10 @@ export class ThreeDsController {
   @HttpCode(HttpStatus.OK)
   @ApiBody({
     description:
-      'Check Payer Auth Enrollment (3DS Challenge) , conform 3ds with token access from link: https://acs-sooty.vercel.app ',
+      'Check Payer Auth Enrollment (3DS Challenge). IMPORTANT: type = "001" pentru VISA, type = "002" pentru MASTERCARD. Token access link: https://acs-sooty.vercel.app',
     examples: {
-      default: {
-        summary: 'Check Payer Auth Enrollment - PENDING',
+      visa: {
+        summary: 'VISA (type = 001)',
         value: {
           orderInformation: {
             amountDetails: {
@@ -104,6 +118,55 @@ export class ThreeDsController {
           },
         },
       },
+      mastercard: {
+        summary: 'MASTERCARD (type = 002)',
+        value: {
+          orderInformation: {
+            amountDetails: {
+              currency: 'USD',
+              totalAmount: '10.99',
+            },
+            billTo: {
+              address1: '1 Market St',
+              administrativeArea: 'CA',
+              country: 'US',
+              locality: 'san francisco',
+              firstName: 'John',
+              lastName: 'Doe',
+              email: 'test@cybs.com',
+              postalCode: '94105',
+            },
+          },
+          paymentInformation: {
+            card: {
+              type: '002',
+              number: '5120342233150747',
+              expirationMonth: '12',
+              expirationYear: '2030',
+            },
+          },
+          buyerInformation: {
+            mobilePhone: '1245789632',
+          },
+          deviceInformation: {
+            ipAddress: '139.130.4.5',
+            httpAcceptContent: 'text/html,application/xhtml+xml',
+            httpBrowserLanguage: 'en-US',
+            httpBrowserJavaEnabled: 'N',
+            httpBrowserJavaScriptEnabled: 'Y',
+            httpBrowserColorDepth: '24',
+            httpBrowserScreenHeight: '1080',
+            httpBrowserScreenWidth: '1920',
+            httpBrowserTimeDifference: '300',
+            userAgentBrowserValue: 'Mozilla/5.0 Chrome/120',
+          },
+          consumerAuthenticationInformation: {
+            deviceChannel: 'BROWSER',
+            transactionMode: 'eCommerce',
+            returnUrl: 'https://polka.requestcatcher.com',
+          },
+        },
+      },
     },
   })
   @ApiResponse({
@@ -117,14 +180,28 @@ export class ThreeDsController {
   @Post('validate-authentication-results')
   @HttpCode(HttpStatus.OK)
   @ApiBody({
-    description: 'Validate Authentication Results (Minimal Body)',
+    description:
+      'Validate Authentication Results. IMPORTANT: type = "VISA" pentru VISA, type = "MASTERCARD" pentru MASTERCARD.',
     examples: {
-      default: {
-        summary: 'Minimal 3DS Challenge Result',
+      visa: {
+        summary: 'VISA (type = VISA)',
         value: {
           paymentInformation: {
             card: {
               type: 'VISA',
+            },
+          },
+          consumerAuthenticationInformation: {
+            authenticationTransactionId: 'k13m6hgiXkDkYveGr8f0',
+          },
+        },
+      },
+      mastercard: {
+        summary: 'MASTERCARD (type = MASTERCARD)',
+        value: {
+          paymentInformation: {
+            card: {
+              type: 'MASTERCARD',
             },
           },
           consumerAuthenticationInformation: {
@@ -147,10 +224,11 @@ export class ThreeDsController {
   @Post('authorize-after-3ds')
   @HttpCode(HttpStatus.OK)
   @ApiBody({
-    description: 'Authorize payment AFTER successful 3DS (CAVV + XID)',
+    description:
+      'Authorize payment AFTER successful 3DS. IMPORTANT: pentru VISA foloseste type = "001", commerceIndicator = "vbv", cavv + xid. Pentru MASTERCARD foloseste type = "002", commerceIndicator = "spa", ucafAuthenticationData + ucafCollectionIndicator (in loc de cavv + xid).',
     examples: {
-      default: {
-        summary: 'Authorize with 3DS data',
+      visa: {
+        summary: 'VISA (cavv + xid)',
         value: {
           clientReferenceInformation: {
             code: 'TC50171_3',
@@ -190,78 +268,23 @@ export class ThreeDsController {
           },
         },
       },
-    },
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Payment authorized with 3DS data',
-  })
-  async authorizeAfter3ds(@Body() body: AuthorizeAfter3dsDto) {
-    return this.threeDsService.authorizeAfter3ds(body);
-  }
-
-  // ================= TOKEN 3DS: Step 1 - Initiate authentication with token =================
-  @Post('token-checkout')
-  @HttpCode(HttpStatus.OK)
-  @ApiBody({
-    description: 'Initiate 3DS authentication using a saved customer token (repeat transaction)',
-    examples: {
-      default: {
-        summary: 'Token 3DS Enrollment',
+      mastercard: {
+        summary: 'MASTERCARD (ucafAuthenticationData + ucafCollectionIndicator)',
         value: {
-          customerId: 'ABC123DEF456',
-          orderInformation: {
-            amountDetails: {
-              totalAmount: '10.99',
-              currency: 'USD',
-            },
-            billTo: {
-              firstName: 'John',
-              lastName: 'Doe',
-              address1: '1 Market St',
-              locality: 'san francisco',
-              administrativeArea: 'CA',
-              postalCode: '94105',
-              country: 'US',
-              email: 'test@cybs.com',
+          clientReferenceInformation: {
+            code: 'TC50171_3',
+          },
+          processingInformation: {
+            commerceIndicator: 'spa',
+          },
+          paymentInformation: {
+            card: {
+              type: '002',
+              number: '5120342233150747',
+              expirationMonth: '12',
+              expirationYear: '2030',
             },
           },
-        },
-      },
-    },
-  })
-  @ApiResponse({ status: 200, description: 'Returns accessToken for 3DS StepUp + authenticationTransactionId' })
-  async tokenCheckout(@Body() body: any) {
-    return this.threeDsService.processTokenCheckout(
-      body.customerId,
-      {
-        totalAmount: body.orderInformation.amountDetails.totalAmount,
-        currency: body.orderInformation.amountDetails.currency,
-        firstName: body.orderInformation.billTo.firstName,
-        lastName: body.orderInformation.billTo.lastName,
-        email: body.orderInformation.billTo.email,
-        address1: body.orderInformation.billTo.address1,
-        locality: body.orderInformation.billTo.locality,
-        administrativeArea: body.orderInformation.billTo.administrativeArea,
-        postalCode: body.orderInformation.billTo.postalCode,
-        country: body.orderInformation.billTo.country,
-      },
-      'https://checkout-callback.requestcatcher.com',
-    );
-  }
-
-  // ================= TOKEN 3DS: Step 2 - Validate + Authorize + Capture with token =================
-  @Post('token-authorize')
-  @HttpCode(HttpStatus.OK)
-  @ApiBody({
-    description: 'Validate 3DS + Authorize + Capture using customer token (after OTP completed)',
-    examples: {
-      default: {
-        summary: 'Token Authorize after 3DS',
-        value: {
-          customerId: 'ABC123DEF456',
-          clientReferenceCode: 'tkn_1234567890',
-          authenticationTransactionId: 'fOyjABgCLcxKEkO7ElB0',
           orderInformation: {
             amountDetails: {
               totalAmount: '10.99',
@@ -279,30 +302,20 @@ export class ThreeDsController {
               phoneNumber: '4158880000',
             },
           },
+          consumerAuthenticationInformation: {
+            ucafAuthenticationData: 'AAIBBYNoEwAAACcKhAJkdQAAAAA=',
+            ucafCollectionIndicator: '2',
+          },
         },
       },
     },
   })
-  @ApiResponse({ status: 200, description: 'Payment authorized + captured with token and 3DS' })
-  async tokenAuthorize(@Body() body: any) {
-    return this.threeDsService.authorizeTokenAfter3ds(
-      body.customerId,
-      body.clientReferenceCode,
-      body.authenticationTransactionId,
-      {
-        totalAmount: body.orderInformation.amountDetails.totalAmount,
-        currency: body.orderInformation.amountDetails.currency,
-        firstName: body.orderInformation.billTo.firstName,
-        lastName: body.orderInformation.billTo.lastName,
-        email: body.orderInformation.billTo.email,
-        address1: body.orderInformation.billTo.address1,
-        locality: body.orderInformation.billTo.locality,
-        administrativeArea: body.orderInformation.billTo.administrativeArea,
-        postalCode: body.orderInformation.billTo.postalCode,
-        country: body.orderInformation.billTo.country,
-        phoneNumber: body.orderInformation.billTo.phoneNumber,
-      },
-    );
+  @ApiResponse({
+    status: 200,
+    description: 'Payment authorized with 3DS data',
+  })
+  async authorizeAfter3ds(@Body() body: AuthorizeAfter3dsDto) {
+    return this.threeDsService.authorizeAfter3ds(body);
   }
 
   // ================= CAPTURE (Finalizare tranzactie 3DS) =================
@@ -474,6 +487,9 @@ export class ThreeDsController {
 
   <div class="iframe-container" id="iframeContainer">
     <iframe name="stepup_iframe" id="stepupIframe"></iframe>
+    <button id="confirmBtn" onclick="confirmPayment()" style="display:none; width:100%; padding:14px; background:#28a745; color:#fff; border:none; border-radius:6px; font-size:16px; cursor:pointer; font-weight:600; margin-top:10px;">
+      Finalizeaza plata
+    </button>
   </div>
 
   <form id="stepupForm" method="POST" target="stepup_iframe">
@@ -543,28 +559,18 @@ export class ThreeDsController {
 
       checkoutState = { cardData, orderData, ...result };
 
-      setStatus('Pas 2/2: Confirma autentificarea in fereastra de mai jos...', 'info');
+      setStatus('Pas 2/2: Confirma autentificarea si asteapta finalizarea...', 'info');
 
       // Show iframe and submit StepUp form to Cardinal
       document.getElementById('iframeContainer').style.display = 'block';
       document.getElementById('jwtInput').value = result.accessToken;
 
-      // Listen for iframe loads: 1st = Cardinal page, 2nd = redirect after OTP = done
-      let iframeLoadCount = 0;
-      const iframe = document.getElementById('stepupIframe');
-      iframe.onload = function() {
-        iframeLoadCount++;
-        // 1st load = Cardinal StepUp page loaded
-        // 2nd load = Cardinal redirected to returnUrl after OTP submitted
-        if (iframeLoadCount >= 2) {
-          iframe.onload = null;
-          completePayment();
-        }
-      };
-
       const form = document.getElementById('stepupForm');
       form.action = result.stepUpUrl;
       form.submit();
+
+      // Start polling for authentication completion
+      startPolling();
 
     } catch (err) {
       setStatus('Eroare: ' + err.message, 'error');
@@ -572,91 +578,77 @@ export class ThreeDsController {
     }
   }
 
-  async function completePayment() {
-    setStatus('<span class="spinner spinner-dark"></span> Se valideaza autentificarea...', 'info');
+  function startPolling() {
+    let attempts = 0;
+    const maxAttempts = 60; // 3 min max (60 x 3s)
 
-    try {
-      const s = checkoutState;
-      const validateCardType = cardTypeMap[s.cardData.type] || s.cardData.type;
-
-      // Step 1: Validate authentication
-      const valResp = await fetch('/3ds/validate-authentication-results', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentInformation: { card: { type: validateCardType } },
-          consumerAuthenticationInformation: {
-            authenticationTransactionId: s.authenticationTransactionId,
-          },
-          clientReferenceInformation: { code: s.clientReferenceCode },
-        }),
-      });
-
-      const valResult = await valResp.json();
-      const authInfo = valResult.data?.consumerAuthenticationInformation || {};
-
-      setStatus('<span class="spinner spinner-dark"></span> Se proceseaza plata...', 'info');
-
-      // Step 2: Authorize + Capture
-      const resp = await fetch('/3ds/authorize-after-3ds', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          clientReferenceInformation: { code: s.clientReferenceCode },
-          processingInformation: { commerceIndicator: authInfo.indicator || 'vbv' },
-          paymentInformation: {
-            card: {
-              type: s.cardData.type,
-              number: s.cardData.number,
-              expirationMonth: s.cardData.expirationMonth,
-              expirationYear: s.cardData.expirationYear,
-            },
-          },
-          orderInformation: {
-            amountDetails: {
-              totalAmount: s.orderData.totalAmount,
-              currency: s.orderData.currency,
-            },
-            billTo: {
-              firstName: s.orderData.firstName,
-              lastName: s.orderData.lastName,
-              address1: s.orderData.address1,
-              locality: s.orderData.locality,
-              administrativeArea: s.orderData.administrativeArea,
-              postalCode: s.orderData.postalCode,
-              country: s.orderData.country,
-              email: s.orderData.email,
-              phoneNumber: '4158880000',
-            },
-          },
-          consumerAuthenticationInformation: {
-            cavv: authInfo.cavv,
-            xid: authInfo.xid,
-            eci: authInfo.eci || authInfo.eciRaw,
-            authenticationTransactionId: s.authenticationTransactionId,
-            paresStatus: authInfo.paresStatus,
-            specificationVersion: authInfo.specificationVersion,
-            directoryServerTransactionId: authInfo.directoryServerTransactionId,
-          },
-        }),
-      });
-
-      const result = await resp.json();
-
-      if (result.success) {
-        setStatus(
-          'Tranzactie completa! Transaction ID: ' + result.id +
-          ' | Status: ' + result.status,
-          'success'
-        );
-        document.getElementById('iframeContainer').style.display = 'none';
-      } else {
-        setStatus('Plata esuata: ' + (result.status || 'Unknown'), 'error');
+    pollTimer = setInterval(async () => {
+      attempts++;
+      if (attempts > maxAttempts) {
+        clearInterval(pollTimer);
+        setStatus('Timeout - autentificarea nu a fost completata in timp util.', 'error');
+        resetBtn();
+        return;
       }
-    } catch (err) {
-      setStatus('Eroare: ' + err.message, 'error');
-    }
-    resetBtn();
+
+      try {
+        // Call authorize-after-3ds which now includes VALIDATE_CONSUMER_AUTHENTICATION
+        // It will validate + authorize + capture in ONE call
+        // If user hasn't completed OTP yet, this will fail and we retry
+        const s = checkoutState;
+        const resp = await fetch('/3ds/authorize-after-3ds', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientReferenceInformation: { code: s.clientReferenceCode },
+            processingInformation: { commerceIndicator: 'vbv' },
+            paymentInformation: {
+              card: {
+                number: s.cardData.number,
+                expirationMonth: s.cardData.expirationMonth,
+                expirationYear: s.cardData.expirationYear,
+              },
+            },
+            orderInformation: {
+              amountDetails: {
+                totalAmount: s.orderData.totalAmount,
+                currency: s.orderData.currency,
+              },
+              billTo: {
+                firstName: s.orderData.firstName,
+                lastName: s.orderData.lastName,
+                address1: s.orderData.address1,
+                locality: s.orderData.locality,
+                administrativeArea: s.orderData.administrativeArea,
+                postalCode: s.orderData.postalCode,
+                country: s.orderData.country,
+                email: s.orderData.email,
+                phoneNumber: '4158880000',
+              },
+            },
+            consumerAuthenticationInformation: {
+              authenticationTransactionId: s.authenticationTransactionId,
+            },
+          }),
+        });
+
+        const result = await resp.json();
+
+        if (result.success && (result.status === 'AUTHORIZED' || result.status === 'PENDING')) {
+          clearInterval(pollTimer);
+          setStatus(
+            'Tranzactie completa! Transaction ID: ' + result.id +
+            ' | Status: ' + result.status,
+            'success'
+          );
+          document.getElementById('iframeContainer').style.display = 'none';
+          resetBtn();
+        }
+        // If not successful, keep polling (user may not have completed OTP yet)
+      } catch (e) {
+        // Not ready yet, keep polling
+      }
+    }, 3000);
   }
 </script>
 
