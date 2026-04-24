@@ -1,34 +1,16 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import axios from 'axios';
 import * as cybersourceRestApi from 'cybersource-rest-client';
+import { CybersourceClientService } from '../shared/cybersource-client.service';
+import { partnerIds } from '../../configCyb/Configuration';
 import { CheckEnrollmentDto } from './dto/check-enrollment.dto';
+import { CheckPayerAuthEnrollmentDto } from './dto/check-payer-auth-enrollment.dto';
 import { ValidateAuthenticationResultsDto } from './dto/validate-authentication-results.dto';
 import { AuthorizeAfter3dsDto } from './dto/authorize-after-3ds.dto';
-const ConfigurationFunction =
-  require('../../configCyb/Configuration').Configuration;
 
 @Injectable()
 export class ThreeDsService {
-  private configObject: any;
-  private apiClient: cybersourceRestApi.ApiClient;
-  private payerAuthApi: cybersourceRestApi.PayerAuthenticationApi;
-  private captureApi: cybersourceRestApi.CaptureApi;
+  constructor(private readonly cyb: CybersourceClientService) {}
 
-  constructor() {
-    // 3DS setup existent
-    this.configObject = new ConfigurationFunction();
-    this.apiClient = new cybersourceRestApi.ApiClient();
-    this.payerAuthApi = new cybersourceRestApi.PayerAuthenticationApi(
-      this.configObject,
-      this.apiClient,
-    );
-    this.captureApi = new cybersourceRestApi.CaptureApi(
-      this.configObject,
-      this.apiClient,
-    );
-  }
-
-  // ================= EXISTING 3DS CHECK ENROLLMENT =================
   async checkEnrollment(dto: CheckEnrollmentDto): Promise<any> {
     const requestObj = new cybersourceRestApi.PayerAuthSetupRequest();
 
@@ -36,38 +18,30 @@ export class ThreeDsService {
       new cybersourceRestApi.Riskv1authenticationsetupsClientReferenceInformation();
     clientReferenceInformation.code = 'cybs_test';
 
-    const clientReferenceInformationPartner =
+    const partner =
       new cybersourceRestApi.Riskv1decisionsClientReferenceInformationPartner();
-    clientReferenceInformationPartner.developerId = '7891234';
-    clientReferenceInformationPartner.solutionId = '89012345';
-    clientReferenceInformation.partner = clientReferenceInformationPartner;
-
+    partner.developerId = partnerIds.developerId;
+    partner.solutionId = partnerIds.solutionId;
+    clientReferenceInformation.partner = partner;
     requestObj.clientReferenceInformation = clientReferenceInformation;
 
     const paymentInformation =
       new cybersourceRestApi.Riskv1authenticationsetupsPaymentInformation();
-    const paymentInformationCard =
+    const card =
       new cybersourceRestApi.Riskv1authenticationsetupsPaymentInformationCard();
-
-    paymentInformationCard.type = dto.paymentInformation.card.type;
-    paymentInformationCard.number = dto.paymentInformation.card.number;
-    paymentInformationCard.expirationMonth =
-      dto.paymentInformation.card.expirationMonth;
-    paymentInformationCard.expirationYear =
-      dto.paymentInformation.card.expirationYear;
-
-    paymentInformation.card = paymentInformationCard;
+    card.type = dto.paymentInformation.card.type;
+    card.number = dto.paymentInformation.card.number;
+    card.expirationMonth = dto.paymentInformation.card.expirationMonth;
+    card.expirationYear = dto.paymentInformation.card.expirationYear;
+    paymentInformation.card = card;
     requestObj.paymentInformation = paymentInformation;
 
     try {
-      const { data, response } = await new Promise<any>((resolve, reject) => {
-        this.payerAuthApi.payerAuthSetup(
-          requestObj,
-          (error, data, response) => {
-            if (error) return reject(error);
-            resolve({ data, response });
-          },
-        );
+      const data = await new Promise<any>((resolve, reject) => {
+        this.cyb.payerAuthApi.payerAuthSetup(requestObj, (error, data) => {
+          if (error) return reject(error);
+          resolve(data);
+        });
       });
 
       return {
@@ -77,8 +51,8 @@ export class ThreeDsService {
         message: 'Cardul este inregistrat pentru 3DS.',
         data,
       };
-    } catch (error) {
-      console.error('3DS Risk Authentication Error:', error);
+    } catch (error: any) {
+      console.error('3DS Setup Error:', error);
       throw new InternalServerErrorException(
         'Eroare 3DS Setup Completion: ' +
           (error.stack || error.message || JSON.stringify(error)),
@@ -86,89 +60,41 @@ export class ThreeDsService {
     }
   }
 
-  // ================= EXISTING: RISK AUTHENTICATION =================
-  async riskAuthentication(body: any): Promise<any> {
-    try {
-      const apiKey = process.env.CYBERSOURCE_API_KEY || '';
-      const apiSecret = process.env.CYBERSOURCE_API_SECRET || '';
-      const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
-
-      const response = await axios.post(
-        'https://apitest.cybersource.com/risk/v1/authentications',
-        body,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Basic ${auth}`,
-          },
-        },
-      );
-
-      return response.data;
-    } catch (error: any) {
-      console.error('Risk Authentication Error:', error.response || error);
-      throw new InternalServerErrorException(
-        'Eroare Risk Authentication: ' +
-          (error.response?.data || error.message || JSON.stringify(error)),
-      );
-    }
-  }
-
-  // ================= NEW: CHECK PAYER AUTH ENROLLMENT =================
-  // ================= CHECK PAYER AUTH ENROLLMENT (CHALLENGE FLOW) =================
-  async checkPayerAuthEnrollment(body: any): Promise<any> {
+  async checkPayerAuthEnrollment(body: CheckPayerAuthEnrollmentDto): Promise<any> {
     try {
       const requestObj =
         new cybersourceRestApi.CheckPayerAuthEnrollmentRequest();
 
-      // Client reference
       const clientRef =
         new cybersourceRestApi.Riskv1authenticationsetupsClientReferenceInformation();
       clientRef.code = 'cybs_test';
       requestObj.clientReferenceInformation = clientRef;
 
-      // Order Information
       requestObj.orderInformation = body.orderInformation;
-
-      // Payment Information
       requestObj.paymentInformation = body.paymentInformation;
-
-      // Buyer Information
       requestObj.buyerInformation = body.buyerInformation;
-
-      // Device Information (CRITIC PENTRU CHALLENGE)
       requestObj.deviceInformation = body.deviceInformation;
 
-      // Consumer Authentication Information
       const consumerAuthInfo =
         new cybersourceRestApi.Riskv1decisionsConsumerAuthenticationInformation();
-
       consumerAuthInfo.deviceChannel =
         body.consumerAuthenticationInformation.deviceChannel;
-
       consumerAuthInfo.transactionMode =
         body.consumerAuthenticationInformation.transactionMode;
-
       consumerAuthInfo.returnUrl =
         body.consumerAuthenticationInformation.returnUrl;
-
       if (body.consumerAuthenticationInformation.referenceId) {
         consumerAuthInfo.referenceId =
           body.consumerAuthenticationInformation.referenceId;
       }
-
       requestObj.consumerAuthenticationInformation = consumerAuthInfo;
 
       return new Promise((resolve, reject) => {
-        this.payerAuthApi.checkPayerAuthEnrollment(
+        this.cyb.payerAuthApi.checkPayerAuthEnrollment(
           requestObj,
-          (error, data, response) => {
+          (error, data) => {
             if (error) return reject(error);
-            resolve({
-              success: true,
-              status: data.status,
-              data,
-            });
+            resolve({ success: true, status: data.status, data });
           },
         );
       });
@@ -187,20 +113,18 @@ export class ThreeDsService {
     try {
       const requestObj = new cybersourceRestApi.ValidateRequest();
 
-      // Client Reference (use same code from the transaction chain if provided)
       const clientReferenceInformation =
         new cybersourceRestApi.Riskv1authenticationsetupsClientReferenceInformation();
-      clientReferenceInformation.code = dto.clientReferenceInformation?.code || 'pavalidatecheck';
+      clientReferenceInformation.code =
+        dto.clientReferenceInformation?.code || 'pavalidatecheck';
 
       const partner =
         new cybersourceRestApi.Riskv1decisionsClientReferenceInformationPartner();
-      partner.developerId = '7891234';
-      partner.solutionId = '89012345';
-
+      partner.developerId = partnerIds.developerId;
+      partner.solutionId = partnerIds.solutionId;
       clientReferenceInformation.partner = partner;
       requestObj.clientReferenceInformation = clientReferenceInformation;
 
-      // Payment Information
       const paymentInformation =
         new cybersourceRestApi.Riskv1authenticationresultsPaymentInformation();
       const card =
@@ -209,24 +133,18 @@ export class ThreeDsService {
       paymentInformation.card = card;
       requestObj.paymentInformation = paymentInformation;
 
-      // Consumer Authentication Information
       const consumerAuth =
         new cybersourceRestApi.Riskv1authenticationresultsConsumerAuthenticationInformation();
       consumerAuth.authenticationTransactionId =
         dto.consumerAuthenticationInformation.authenticationTransactionId;
       requestObj.consumerAuthenticationInformation = consumerAuth;
 
-      // Call CyberSource
       return new Promise((resolve, reject) => {
-        this.payerAuthApi.validateAuthenticationResults(
+        this.cyb.payerAuthApi.validateAuthenticationResults(
           requestObj,
           (error, data, response) => {
             if (error) return reject(error);
-            resolve({
-              success: true,
-              status: response?.status,
-              data,
-            });
+            resolve({ success: true, status: response?.status, data });
           },
         );
       });
@@ -240,29 +158,48 @@ export class ThreeDsService {
   }
 
   async processFullCheckout(
-    cardData: { type: string; number: string; expirationMonth: string; expirationYear: string },
-    orderData: { totalAmount: string; currency: string; firstName: string; lastName: string; email: string; address1: string; locality: string; administrativeArea: string; postalCode: string; country: string },
+    cardData: {
+      type: string;
+      number: string;
+      expirationMonth: string;
+      expirationYear: string;
+    },
+    orderData: {
+      totalAmount: string;
+      currency: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      address1: string;
+      locality: string;
+      administrativeArea: string;
+      postalCode: string;
+      country: string;
+    },
     returnUrl: string,
-  ): Promise<{ accessToken: string; authenticationTransactionId: string; stepUpUrl: string; clientReferenceCode: string }> {
+  ): Promise<{
+    accessToken: string;
+    authenticationTransactionId: string;
+    stepUpUrl: string;
+    clientReferenceCode: string;
+  }> {
     const clientReferenceCode = 'txn_' + Date.now();
 
-    // Single createPayment call with actionList: CONSUMER_AUTHENTICATION
-    // This combines setup + enrollment into one API call
     const requestObj = new cybersourceRestApi.CreatePaymentRequest();
 
-    // Client Reference
-    const clientRef = new cybersourceRestApi.Ptsv2paymentsClientReferenceInformation();
+    const clientRef =
+      new cybersourceRestApi.Ptsv2paymentsClientReferenceInformation();
     clientRef.code = clientReferenceCode;
     requestObj.clientReferenceInformation = clientRef;
 
-    // Processing Information with actionList
-    const processingInfo = new cybersourceRestApi.Ptsv2paymentsProcessingInformation();
+    const processingInfo =
+      new cybersourceRestApi.Ptsv2paymentsProcessingInformation();
     processingInfo.actionList = ['CONSUMER_AUTHENTICATION'];
     processingInfo.capture = false;
     requestObj.processingInformation = processingInfo;
 
-    // Payment Information
-    const paymentInfo = new cybersourceRestApi.Ptsv2paymentsPaymentInformation();
+    const paymentInfo =
+      new cybersourceRestApi.Ptsv2paymentsPaymentInformation();
     const card = new cybersourceRestApi.Ptsv2paymentsPaymentInformationCard();
     card.type = cardData.type;
     card.number = cardData.number;
@@ -271,9 +208,9 @@ export class ThreeDsService {
     paymentInfo.card = card;
     requestObj.paymentInformation = paymentInfo;
 
-    // Order Information
     const orderInfo = new cybersourceRestApi.Ptsv2paymentsOrderInformation();
-    const amountDetails = new cybersourceRestApi.Ptsv2paymentsOrderInformationAmountDetails();
+    const amountDetails =
+      new cybersourceRestApi.Ptsv2paymentsOrderInformationAmountDetails();
     amountDetails.totalAmount = orderData.totalAmount;
     amountDetails.currency = orderData.currency;
     orderInfo.amountDetails = amountDetails;
@@ -290,10 +227,8 @@ export class ThreeDsService {
     orderInfo.billTo = billTo;
     requestObj.orderInformation = orderInfo;
 
-    // Buyer Information
     requestObj.buyerInformation = { mobilePhone: '1245789632' };
 
-    // Device Information
     requestObj.deviceInformation = {
       ipAddress: '139.130.4.5',
       httpAcceptContent: 'text/html,application/xhtml+xml',
@@ -307,20 +242,15 @@ export class ThreeDsService {
       userAgentBrowserValue: 'Mozilla/5.0 Chrome/120',
     };
 
-    // Consumer Authentication Information
-    const consumerAuth = new cybersourceRestApi.Ptsv2paymentsConsumerAuthenticationInformation();
+    const consumerAuth =
+      new cybersourceRestApi.Ptsv2paymentsConsumerAuthenticationInformation();
     consumerAuth.deviceChannel = 'BROWSER';
     consumerAuth.transactionMode = 'eCommerce';
     consumerAuth.returnUrl = returnUrl;
     requestObj.consumerAuthenticationInformation = consumerAuth;
 
-    const paymentsApi = new cybersourceRestApi.PaymentsApi(
-      this.configObject,
-      this.apiClient,
-    );
-
     const result = await new Promise<any>((resolve, reject) => {
-      paymentsApi.createPayment(requestObj, (error, data, response) => {
+      this.cyb.paymentsApi.createPayment(requestObj, (error, data) => {
         if (error) return reject(error);
         resolve({ success: true, status: data.status, id: data.id, data });
       });
@@ -331,7 +261,9 @@ export class ThreeDsService {
     return {
       accessToken: authInfo?.accessToken,
       authenticationTransactionId: authInfo?.authenticationTransactionId,
-      stepUpUrl: authInfo?.stepUpUrl || 'https://centinelapistag.cardinalcommerce.com/V2/Cruise/StepUp',
+      stepUpUrl:
+        authInfo?.stepUpUrl ||
+        'https://centinelapistag.cardinalcommerce.com/V2/Cruise/StepUp',
       clientReferenceCode,
     };
   }
@@ -339,14 +271,8 @@ export class ThreeDsService {
   async authorizeAfter3ds(dto: AuthorizeAfter3dsDto): Promise<any> {
     try {
       const requestObj = new cybersourceRestApi.CreatePaymentRequest();
-
-      // Client Reference
       requestObj.clientReferenceInformation = dto.clientReferenceInformation;
 
-      // Processing Information
-      // Daca user trimite authenticationTransactionId -> folosim VALIDATE_CONSUMER_AUTHENTICATION
-      // (Cybersource face singur lookup-ul autentificarii)
-      // Altfel -> trimitem cavv/xid sau UCAF raw si autorizam direct
       const processingInfo =
         new cybersourceRestApi.Ptsv2paymentsProcessingInformation();
       if (dto.consumerAuthenticationInformation.authenticationTransactionId) {
@@ -357,62 +283,32 @@ export class ThreeDsService {
         dto.processingInformation.commerceIndicator;
       requestObj.processingInformation = processingInfo;
 
-      // Payment Information
-      requestObj.paymentInformation = {
-        card: dto.paymentInformation.card,
-      };
-
-      // Order Information
+      requestObj.paymentInformation = { card: dto.paymentInformation.card };
       requestObj.orderInformation = dto.orderInformation;
 
-      // Consumer Authentication Information (3DS RESULT)
-      // VISA foloseste cavv + xid
-      // MASTERCARD foloseste ucafAuthenticationData + ucafCollectionIndicator
       const consumerAuth =
         new cybersourceRestApi.Ptsv2paymentsConsumerAuthenticationInformation();
-      if (dto.consumerAuthenticationInformation.cavv) {
-        consumerAuth.cavv = dto.consumerAuthenticationInformation.cavv;
-      }
-      if (dto.consumerAuthenticationInformation.xid) {
-        consumerAuth.xid = dto.consumerAuthenticationInformation.xid;
-      }
-      if (dto.consumerAuthenticationInformation.ucafAuthenticationData) {
-        consumerAuth.ucafAuthenticationData =
-          dto.consumerAuthenticationInformation.ucafAuthenticationData;
-      }
-      if (dto.consumerAuthenticationInformation.ucafCollectionIndicator) {
-        consumerAuth.ucafCollectionIndicator =
-          dto.consumerAuthenticationInformation.ucafCollectionIndicator;
-      }
-      if (dto.consumerAuthenticationInformation.eci) {
-        consumerAuth.eciRaw = dto.consumerAuthenticationInformation.eci;
-      }
-      if (dto.consumerAuthenticationInformation.specificationVersion) {
-        consumerAuth.paSpecificationVersion = dto.consumerAuthenticationInformation.specificationVersion;
-      }
-      if (dto.consumerAuthenticationInformation.directoryServerTransactionId) {
-        consumerAuth.directoryServerTransactionId = dto.consumerAuthenticationInformation.directoryServerTransactionId;
-      }
-      if (dto.consumerAuthenticationInformation.authenticationTransactionId) {
-        consumerAuth.authenticationTransactionId = dto.consumerAuthenticationInformation.authenticationTransactionId;
-      }
-      if (dto.consumerAuthenticationInformation.paresStatus) {
-        consumerAuth.paresStatus = dto.consumerAuthenticationInformation.paresStatus;
-      }
+      const ca = dto.consumerAuthenticationInformation;
+      if (ca.cavv) consumerAuth.cavv = ca.cavv;
+      if (ca.xid) consumerAuth.xid = ca.xid;
+      if (ca.ucafAuthenticationData)
+        consumerAuth.ucafAuthenticationData = ca.ucafAuthenticationData;
+      if (ca.ucafCollectionIndicator)
+        consumerAuth.ucafCollectionIndicator = ca.ucafCollectionIndicator;
+      if (ca.eci) consumerAuth.eciRaw = ca.eci;
+      if (ca.specificationVersion)
+        consumerAuth.paSpecificationVersion = ca.specificationVersion;
+      if (ca.directoryServerTransactionId)
+        consumerAuth.directoryServerTransactionId =
+          ca.directoryServerTransactionId;
+      if (ca.authenticationTransactionId)
+        consumerAuth.authenticationTransactionId =
+          ca.authenticationTransactionId;
+      if (ca.paresStatus) consumerAuth.paresStatus = ca.paresStatus;
       requestObj.consumerAuthenticationInformation = consumerAuth;
 
-      const paymentsApi = new cybersourceRestApi.PaymentsApi(
-        this.configObject,
-        this.apiClient,
-      );
-
-      console.log(
-        '[authorize-after-3ds] REQUEST sent to Cybersource:',
-        JSON.stringify(requestObj, null, 2),
-      );
-
       return new Promise((resolve, reject) => {
-        paymentsApi.createPayment(requestObj, (error, data, response) => {
+        this.cyb.paymentsApi.createPayment(requestObj, (error, data) => {
           if (error) {
             console.error(
               '[authorize-after-3ds] CYBERSOURCE ERROR body:',
@@ -420,12 +316,7 @@ export class ThreeDsService {
             );
             return reject(error);
           }
-          resolve({
-            success: true,
-            status: data.status,
-            id: data.id,
-            data,
-          });
+          resolve({ success: true, status: data.status, id: data.id, data });
         });
       });
     } catch (error: any) {
@@ -445,31 +336,26 @@ export class ThreeDsService {
     try {
       const requestObj = new cybersourceRestApi.CapturePaymentRequest();
 
-      // Client Reference
-      const clientRef = new cybersourceRestApi.Ptsv2paymentsClientReferenceInformation();
+      const clientRef =
+        new cybersourceRestApi.Ptsv2paymentsClientReferenceInformation();
       clientRef.code = clientRefCode || 'capture_' + Date.now();
       requestObj.clientReferenceInformation = clientRef;
 
-      // Order Information (amount to capture)
       const orderInfo = new cybersourceRestApi.Ptsv2paymentsOrderInformation();
-      const amountDetails = new cybersourceRestApi.Ptsv2paymentsOrderInformationAmountDetails();
+      const amountDetails =
+        new cybersourceRestApi.Ptsv2paymentsOrderInformationAmountDetails();
       amountDetails.totalAmount = totalAmount;
       amountDetails.currency = currency;
       orderInfo.amountDetails = amountDetails;
       requestObj.orderInformation = orderInfo;
 
       return new Promise((resolve, reject) => {
-        this.captureApi.capturePayment(
+        this.cyb.captureApi.capturePayment(
           requestObj,
           transactionId,
-          (error, data, response) => {
+          (error, data) => {
             if (error) return reject(error);
-            resolve({
-              success: true,
-              status: data.status,
-              id: data.id,
-              data,
-            });
+            resolve({ success: true, status: data.status, id: data.id, data });
           },
         );
       });

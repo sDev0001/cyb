@@ -1,46 +1,46 @@
-const AuthenticationType: string = 'http_signature';
-const RunEnvironment: string = 'apitest.cybersource.com';
-const MerchantId: string = 'ebilete001';
+import * as dotenv from 'dotenv';
 
-const MerchantKeyId: string = '41ef2ed8-42a2-4a59-8dca-863d7f9c3b13';
-const MerchantSecretKey: string = 'Nku+kCZUUVffNEacbM3plu2bYQRf+xnVfnMQ1sHh3y0=';
-
-const KeysDirectory: string = 'Resource';
-const KeyFileName: string = 'ebilete001';
-const KeyAlias: string = 'ebilete001';
-const KeyPass: string = 'ebilete001';
-
-const EnableLog: boolean = true;
-const LogFileName: string = 'cybs';
-
-const LogDirectory: string | null = null;
-
-const LogfileMaxSize: string = '5242880';
-const EnableMasking: boolean = true;
-const LoggingLevel: string = 'debug';
+dotenv.config();
 
 export function Configuration(): any {
-  const configObj = {
-    authenticationType: AuthenticationType,
-    runEnvironment: RunEnvironment,
+  const missing: string[] = [];
+  const required = [
+    'CYBERSOURCE_MERCHANT_ID',
+    'CYBERSOURCE_MERCHANT_KEY_ID',
+    'CYBERSOURCE_MERCHANT_SECRET_KEY',
+  ];
+  for (const key of required) {
+    if (!process.env[key]) missing.push(key);
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required CyberSource env vars: ${missing.join(', ')}. See .env.example.`,
+    );
+  }
 
-    merchantID: MerchantId,
-    merchantKeyId: MerchantKeyId,
-    merchantsecretKey: MerchantSecretKey,
+  return {
+    authenticationType: process.env.CYBERSOURCE_AUTH_TYPE || 'http_signature',
+    runEnvironment:
+      process.env.CYBERSOURCE_RUN_ENVIRONMENT || 'apitest.cybersource.com',
 
-    keyAlias: KeyAlias,
-    keyPass: KeyPass,
-    keyFileName: KeyFileName,
-    keysDirectory: KeysDirectory,
+    merchantID: process.env.CYBERSOURCE_MERCHANT_ID,
+    merchantKeyId: process.env.CYBERSOURCE_MERCHANT_KEY_ID,
+    merchantsecretKey: process.env.CYBERSOURCE_MERCHANT_SECRET_KEY,
+
+    keyAlias: process.env.CYBERSOURCE_KEY_ALIAS,
+    keyPass: process.env.CYBERSOURCE_KEY_PASS,
+    keyFileName: process.env.CYBERSOURCE_KEY_FILE_NAME,
+    keysDirectory: process.env.CYBERSOURCE_KEYS_DIRECTORY || 'Resource',
 
     logConfiguration: {
-      // enableLog: EnableLog,
-      // logFileName: LogFileName,
-      // logDirectory: LogDirectory,
-      logFileMaxSize: LogfileMaxSize,
-      loggingLevel: LoggingLevel,
-      enableMasking: EnableMasking,
+      logFileMaxSize: process.env.CYBERSOURCE_LOG_FILE_MAX_SIZE || '5242880',
+      loggingLevel: process.env.CYBERSOURCE_LOGGING_LEVEL || 'debug',
+      enableMasking: process.env.CYBERSOURCE_ENABLE_MASKING !== 'false',
     },
   };
-  return configObj;
 }
+
+export const partnerIds = {
+  developerId: process.env.CYBERSOURCE_PARTNER_DEVELOPER_ID || '7891234',
+  solutionId: process.env.CYBERSOURCE_PARTNER_SOLUTION_ID || '89012345',
+};
